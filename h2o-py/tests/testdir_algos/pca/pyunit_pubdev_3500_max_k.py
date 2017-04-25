@@ -9,19 +9,47 @@ from h2o.transforms.decomposition import H2OPCA
 
 
 def pca_max_k():
-  data = h2o.import_file(path=pyunit_utils.locate("smalldata/prostate/prostate_cat.csv"))  # Nidhi: import may not work
+  data = h2o.upload_file(pyunit_utils.locate("bigdata/laptop/jira/rotterdam.csv.zip"))
+  y = set(["relapse"])
+  x = list(set(data.names)-y)
+  pcaGramSVD = H2OPCA(k=-1, transform="STANDARDIZE", pca_method="GramSVD", impute_missing=True, max_iterations=100)
+  pcaGramSVD.train(x, training_frame=data)
 
-  pcaGramSVD = H2OPCA(k=-1, transform="STANDARDIZE", pca_method="GramSVD")
-  pcaGramSVD.train(x=list(range(0, data.ncols)), training_frame=data)
+  pcaPower = H2OPCA(k=-1, transform="STANDARDIZE", pca_method="Power", impute_missing=True, max_iterations=100)
+  pcaPower.train(x, training_frame=data)
 
-  pcaPower = H2OPCA(k=-1, transform="STANDARDIZE", pca_method="Power")
-  pcaPower.train(x=list(range(0, data.ncols)), training_frame=data)
+  # compare singular values and stuff with GramSVD
+  print("@@@@@@  Comparing eigenvalues between GramSVD and Power...\n")
+  pyunit_utils.assert_H2OTwoDimTable_equal(pcaGramSVD._model_json["output"]["importance"],
+                                           pcaPower._model_json["output"]["importance"],
+                                           ["Standard deviation", "Cumulative Proportion", "Cumulative Proportion"])
+  print("@@@@@@  Comparing eigenvectors between GramSVD and Power...\n")
+  # compare singular vectors
+  pyunit_utils.assert_H2OTwoDimTable_equal(pcaGramSVD._model_json["output"]["eigenvectors"],
+                                           pcaPower._model_json["output"]["eigenvectors"],
+                                           pcaPower._model_json["output"]["names"], tolerance=1e-5, check_sign=True)
 
-  pcaRandomized = H2OPCA(k=-1, transform="STANDARDIZE", pca_method="Randomized")
-  pcaRandomized.train(x=list(range(0, data.ncols)), training_frame=data)
+  data = h2o.upload_file(pyunit_utils.locate("smalldata/prostate/prostate_cat.csv"))
+  x = list(set(data.names))
+  pcaRandomized = H2OPCA(k=-1, transform="STANDARDIZE", pca_method="Randomized", impute_missing=True,
+                         max_iterations=100, seed=12345)
+  pcaRandomized.train(x, training_frame=data)
 
-  pcaGLRM = H2OPCA(k=-1, transform="STANDARDIZE", pca_method="GLRM")
-  pcaGLRM.train(x=list(range(0, data.ncols)), training_frame=data)
+  pcaGLRM = H2OPCA(k=-1, transform="STANDARDIZE", pca_method="GLRM", use_all_factor_levels=True, impute_missing=True,
+                   max_iterations=100, seed=12345)
+  pcaGLRM.train(x, training_frame=data)
+
+
+  # compare singular values and stuff with GramSVD
+  print("@@@@@@  Comparing eigenvalues between GramSVD and Power...\n")
+  pyunit_utils.assert_H2OTwoDimTable_equal(pcaRandomized._model_json["output"]["importance"],
+                                           pcaGLRM._model_json["output"]["importance"],
+                                           ["Standard deviation", "Cumulative Proportion", "Cumulative Proportion"])
+  print("@@@@@@  Comparing eigenvectors between GramSVD and Power...\n")
+  # compare singular vectors
+  pyunit_utils.assert_H2OTwoDimTable_equal(pcaRandomized._model_json["output"]["eigenvectors"],
+                                           pcaGLRM._model_json["output"]["eigenvectors"],
+                                           pcaGLRM._model_json["output"]["names"], tolerance=1e-5, check_sign=True)
 
 if __name__ == "__main__":
   pyunit_utils.standalone_test(pca_max_k)
